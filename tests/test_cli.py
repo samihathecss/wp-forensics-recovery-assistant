@@ -4,6 +4,7 @@ Tests cover: scan, compare, and inspect-zip subcommands,
 error handling for missing paths, and the --verify-core flag.
 """
 import json
+import time
 import zipfile
 
 import pytest
@@ -21,9 +22,31 @@ class TestScanCommand:
 
         plugin_dir = scan_root / "wp-content" / "plugins"
         plugin_dir.mkdir(parents=True)
-        (plugin_dir / "suspicious.php").write_text(
+        suspicious_file = plugin_dir / "suspicious.php"
+        suspicious_file.write_text(
             "<?php eval(base64_decode($_GET['cmd'])); ?>"
         )
+
+        # Windows Defender real-time protection may temporarily lock newly
+        # created files containing suspicious patterns (eval, system, etc.),
+        # preventing immediate read access. Retry with backoff so the test is
+        # deterministic on systems without active file-locking AV.
+        # The detection assertion is unchanged; this only waits for the file
+        # to become readable.
+        content = None
+        for _attempt in range(10):
+            try:
+                content = suspicious_file.read_text(encoding="utf-8")
+                break
+            except (PermissionError, FileNotFoundError):
+                time.sleep(0.5)
+        if content is None:
+            raise AssertionError(
+                "Could not read test fixture after 5s: Windows Defender "
+                "may be deleting or locking newly created files containing "
+                "eval() patterns. This is an environment-specific "
+                "limitation, not a detection-engine defect."
+            )
 
         output_dir = tmp_path / "output"
         exit_code = main(["scan", str(scan_root), "-o", str(output_dir)])
