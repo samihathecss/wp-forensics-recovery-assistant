@@ -1,0 +1,14 @@
+include README.md
+include requirements.txt
+include AGENTS.md
+include conftest.py
+include app.py
+recursive-include wp_forensics *.py
+recursive-include tests *.py
+prune __pycache__
+prune .pytest_cache
+prune testoutput
+prune testsite
+global-exclude *.tmp
+global-exclude *.pyc
+global-exclude *.pyo
